@@ -37,10 +37,47 @@ def _build_llm():
 SCORING_SYSTEM = """You are a job match scorer. Score how well a job matches this candidate:
 Skills: Kubernetes, Terraform, AWS, Python, LangChain, DevOps, SRE, CI/CD, Prometheus, Grafana, AI/ML
 Experience: 8 years SRE/Platform/DevOps/AI Engineering
+Visa: H1B (needs sponsorship or h1b-friendly employer; cannot work on jobs requiring US citizenship, green card, or security clearance)
 
 Return ONLY valid JSON:
 {"score": 0.85, "reason": "Strong match because...", "highlights": ["skill1", "skill2"]}
 score must be 0.0 to 1.0"""
+
+# Keywords that disqualify a job for H1B candidates
+_H1B_DISQUALIFY = [
+    "us citizen", "u.s. citizen", "united states citizen",
+    "must be a citizen", "citizenship required", "citizens only",
+    "green card", "permanent resident", "gc only", "gc required",
+    "security clearance", "secret clearance", "top secret", "ts/sci",
+    "ts clearance", "dod clearance", "public trust clearance",
+    "no sponsorship", "not eligible for sponsorship",
+    "sponsorship not available", "cannot sponsor",
+    "we are unable to sponsor", "not able to sponsor",
+    "authorization to work in the us without sponsorship",
+    "must be authorized to work without sponsorship",
+]
+
+# Keywords that indicate H1B-friendly or sponsorship offered
+_H1B_FRIENDLY = [
+    "h1b", "h-1b", "visa sponsorship", "sponsorship available",
+    "will sponsor", "open to sponsorship", "h1b transfer",
+]
+
+
+def _is_h1b_eligible(job: dict) -> tuple[bool, str]:
+    """Return (eligible, reason). Filters out citizenship/clearance/no-sponsorship jobs."""
+    text = (
+        job.get("jobtitle", "") + " " +
+        job.get("snippet", "") + " " +
+        job.get("company", "")
+    ).lower()
+
+    for phrase in _H1B_DISQUALIFY:
+        if phrase in text:
+            return False, f"Disqualified: '{phrase}' found in job description"
+
+    h1b_hint = any(phrase in text for phrase in _H1B_FRIENDLY)
+    return True, "H1B friendly" if h1b_hint else "No explicit sponsorship mention"
 
 
 def _fetch_jobspy(role: str, portal: str, hours_old: int = 24, results: int = 15) -> list[dict]:
@@ -183,10 +220,26 @@ class JobScannerAgent:
                 seen.add(url)
                 unique.append(job)
 
-        logger.info(f"Total unique jobs fetched: {len(unique)} — scoring now...")
+        logger.info(f"Total unique jobs fetched: {len(unique)} — filtering for H1B eligibility...")
+
+        # H1B visa filter — drop citizenship/clearance/no-sponsorship jobs
+        h1b_eligible = []
+        h1b_dropped = 0
+        for job in unique:
+            eligible, reason = _is_h1b_eligible(job)
+            if eligible:
+                job["visa_note"] = reason
+                h1b_eligible.append(job)
+            else:
+                h1b_dropped += 1
+                logger.debug(f"  Dropped (H1B filter): {job.get('jobtitle','?')} @ {job.get('company','?')} — {reason}")
+
+        logger.info(f"H1B filter: kept {len(h1b_eligible)}, dropped {h1b_dropped} (citizenship/clearance/no-sponsorship)")
+
+        logger.info(f"Scoring {len(h1b_eligible)} H1B-eligible jobs...")
 
         # Score all jobs
-        scored = [self._score_job_sync(j) for j in unique]
+        scored = [self._score_job_sync(j) for j in h1b_eligible]
         qualified = [j for j in scored if j.get("match_score", 0) >= self.min_score]
         qualified.sort(key=lambda x: x.get("match_score", 0), reverse=True)
 
