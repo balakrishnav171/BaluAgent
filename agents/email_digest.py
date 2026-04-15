@@ -50,6 +50,7 @@ EMAIL_TEMPLATE = Template("""
   </p>
   {% endif %}
   <p style="font-size:12px;color:#888;">{{ job.snippet or '' | truncate(200) }}</p>
+  <p style="font-size:11px;color:#aaa;">Posted: {{ job.date or 'Today' }} · Source: {{ job.source or 'remote' }}</p>
 </div>
 {% endfor %}
 

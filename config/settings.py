@@ -5,14 +5,15 @@ from typing import List
 
 
 class Settings(BaseSettings):
-    # LLM
-    openai_api_key: str = Field(..., env="OPENAI_API_KEY")
-    anthropic_api_key: str = Field(default="", env="ANTHROPIC_API_KEY")
-    model_name: str = Field(default="gpt-4o", env="MODEL_NAME")
+    # LLM — Ollama or OpenAI
+    openai_api_key: str = Field(default="dummy", env="OPENAI_API_KEY")
+    ollama_base_url: str = Field(default="http://localhost:11434", env="OLLAMA_BASE_URL")
+    model_name: str = Field(default="orca-mini", env="MODEL_NAME")
+    use_ollama: bool = Field(default=True, env="USE_OLLAMA")
 
     # LangSmith
     langchain_api_key: str = Field(default="", env="LANGCHAIN_API_KEY")
-    langchain_tracing_v2: bool = Field(default=True, env="LANGCHAIN_TRACING_V2")
+    langchain_tracing_v2: bool = Field(default=False, env="LANGCHAIN_TRACING_V2")
     langchain_project: str = Field(default="BaluAgent", env="LANGCHAIN_PROJECT")
 
     # Email
@@ -23,14 +24,14 @@ class Settings(BaseSettings):
     digest_recipient: str = Field(default="", env="DIGEST_RECIPIENT")
 
     # Job Search
-    max_jobs_per_run: int = Field(default=50, env="MAX_JOBS_PER_RUN")
-    min_match_score: float = Field(default=0.75, env="MIN_MATCH_SCORE")
+    max_jobs_per_run: int = Field(default=20, env="MAX_JOBS_PER_RUN")
+    min_match_score: float = Field(default=0.3, env="MIN_MATCH_SCORE")
     target_roles: List[str] = Field(
         default=["Senior SRE", "Platform Engineer", "DevOps Engineer"],
         env="TARGET_ROLES"
     )
     target_locations: List[str] = Field(
-        default=["Remote", "San Francisco"],
+        default=["Remote"],
         env="TARGET_LOCATIONS"
     )
     job_scan_interval_hours: int = Field(default=24, env="JOB_SCAN_INTERVAL_HOURS")
