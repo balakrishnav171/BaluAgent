@@ -43,10 +43,12 @@ class Settings(BaseSettings):
     a2a_agent_id: str = Field(default="balu-agent-001", env="A2A_AGENT_ID")
     a2a_coordinator_url: str = Field(default="http://localhost:9000", env="A2A_COORDINATOR_URL")
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8",
+        "case_sensitive": False,
+        "protected_namespaces": ("settings_",),
+    }
 
 
 settings = Settings()
