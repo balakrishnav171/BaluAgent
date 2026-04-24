@@ -84,7 +84,7 @@ def _fetch_jobspy(role: str, portal: str, hours_old: int = 24, results: int = 15
     """Fetch jobs from a single portal via jobspy."""
     try:
         from jobspy import scrape_jobs
-        df = scrape_jobs(
+        kwargs: dict = dict(
             site_name=[portal],
             search_term=role,
             location="Remote",
@@ -93,19 +93,33 @@ def _fetch_jobspy(role: str, portal: str, hours_old: int = 24, results: int = 15
             country_indeed="USA",
             verbose=0,
         )
+        # LinkedIn: only fetch Easy Apply jobs — these can be submitted without browser forms
+        if portal == "linkedin":
+            kwargs["easy_apply"] = True
+        df = scrape_jobs(**kwargs)
         if df is None or df.empty:
             return []
 
         jobs = []
         for _, row in df.iterrows():
+            is_remote_flag = row.get("is_remote")
+            if is_remote_flag is None or str(is_remote_flag) in ("nan", "None", ""):
+                is_remote_flag = None
+            else:
+                is_remote_flag = bool(is_remote_flag)
+            direct = str(row.get("job_url_direct") or "")
             jobs.append({
                 "jobtitle":          str(row.get("title", "")),
                 "company":           str(row.get("company", "")),
-                "formattedLocation": str(row.get("location", "Remote")),
-                "snippet":           str(row.get("description", ""))[:500] if row.get("description") else "",
+                "formattedLocation": str(row.get("location", "")),
+                "snippet":           str(row.get("description", ""))[:600] if row.get("description") else "",
                 "url":               str(row.get("job_url", "")),
+                "url_direct":        direct if direct not in ("nan", "None", "") else "",
                 "source":            portal,
                 "date":              str(row.get("date_posted", "")),
+                "is_remote":         is_remote_flag,
+                "is_easy_apply":     portal == "linkedin",  # easy_apply=True was set for linkedin
+                "job_type":          str(row.get("job_type", "")),
             })
         logger.info(f"  {portal}: found {len(jobs)} jobs for '{role}'")
         return jobs

@@ -16,3 +16,11 @@ env/
 .ruff_cache/
 htmlcov/
 .coverage
+
+# Runtime data files
+linkedin_session.json
+indeed_session.json
+applied_jobs.json
+job_queue.json
+k8s_apply_queue.json
+blocklist.json

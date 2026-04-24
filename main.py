@@ -71,6 +71,72 @@ def serve_mcp():
 
 
 @cli.command()
+@click.option("--queue", default="job_queue.json", help="Path to job_queue.json")
+@click.option("--applied", default="applied_jobs.json", help="Path to applied_jobs.json")
+@click.option("--blocklist", default="blocklist.json", help="Path to blocklist.json")
+@click.option("--max-jobs", default=30, help="Max jobs to apply per run")
+def apply(queue: str, applied: str, blocklist: str, max_jobs: int):
+    """Apply to jobs from job_queue.json (output of BaluAgent-Finder)."""
+    from agents.job_applier import JobApplierAgent
+    from config.settings import settings
+
+    console.print("[bold green]BaluAgent-Applier[/] starting...", style="bold")
+    agent = JobApplierAgent(
+        smtp_host=settings.smtp_host,
+        smtp_port=settings.smtp_port,
+        smtp_user=settings.smtp_user,
+        smtp_password=settings.smtp_password,
+        queue_path=queue,
+        applied_path=applied,
+        blocklist_path=blocklist,
+        max_per_run=max_jobs,
+    )
+    summary = agent.run()
+
+    table = Table(title="BaluAgent-Applier Summary")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Count", style="green")
+    table.add_row("Applied", str(summary["applied"]))
+    table.add_row("Skipped (filter)", str(summary["skipped"]))
+    table.add_row("Blocked (CAPTCHA/no-button)", str(summary["blocked"]))
+    table.add_row("Failed", str(summary["failed"]))
+    table.add_row("Total Processed", str(summary["total_processed"]))
+    console.print(table)
+
+
+@cli.command()
+def find_and_apply():
+    """Run full pipeline: scan jobs → tailor → apply → digest."""
+    from workflows.job_search_graph import run_workflow
+    from agents.job_applier import JobApplierAgent
+    from config.settings import settings
+    import json
+
+    console.print("[bold green]BaluAgent[/] full pipeline starting...", style="bold")
+
+    async def _run():
+        state = await run_workflow()
+        # Dump top jobs into job_queue.json for applier
+        queue_path = "job_queue.json"
+        with open(queue_path, "w") as f:
+            json.dump(state.get("scored_jobs", []), f, indent=2)
+        console.print(f"[cyan]{len(state.get('scored_jobs', []))} jobs written to {queue_path}[/]")
+
+        agent = JobApplierAgent(
+            smtp_host=settings.smtp_host,
+            smtp_port=settings.smtp_port,
+            smtp_user=settings.smtp_user,
+            smtp_password=settings.smtp_password,
+            queue_path=queue_path,
+        )
+        summary = agent.run()
+        _print_summary(state)
+        console.print(f"[bold]Applied: {summary['applied']} | Blocked: {summary['blocked']} | Skipped: {summary['skipped']}[/]")
+
+    asyncio.run(_run())
+
+
+@cli.command()
 def status():
     """Show BaluAgent configuration status."""
     from config.settings import settings
